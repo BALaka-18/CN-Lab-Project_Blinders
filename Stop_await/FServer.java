@@ -1,91 +1,122 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+/**
+ *
+ * @author BALAKA
+ */
+
 import java.net.*;
 import java.io.*;
 import java.util.*;
 
 public class FServer {
-	private static final double LOSS_RATE = 0.2;
+    private static final double LOSS_RATE = 0.3;
+	private static final int AVERAGE_DELAY = 100; // milliseconds
 
 	public static void main(String[] args) {
 
 		DatagramSocket ss = null;
 		FileInputStream fis = null;
+
 		DatagramPacket rp, sp;
 		byte[] rd, sd;
-		String reply;
+
+		int flag = 0;
+
 		InetAddress ip;
 		int port;
 
 		try {
-			ss = new DatagramSocket(Integer.parseInt(args[0]));
-			ss.setSoTimeout(3000);
-			System.out.println("Server is up....");
-			// read file into buffer
-			rd=new byte[100];
-			sd=new byte[512];
-			rp = new DatagramPacket(rd,rd.length);
-			ss.receive(rp);
-			ip = rp.getAddress();
-			port =rp.getPort();
-			reply=new String(rp.getData());
-			String file_name = reply.substring(7, reply.length()).trim();
-			fis = new FileInputStream(file_name);
+			ss = new DatagramSocket(Integer.parseInt(args[0])); // setting port no;
+			System.out.println("Server is Listening....");
 
+			// read file into buffer
 			int consignment;
 			String strConsignment;
 			int result = 0; // number of bytes read
-			int count = 0;
-			while(true & result != -1){
 
-				rd=new byte[100];
-				sd=new byte[512];
-
-
-				// prepare data
-				result = fis.read(sd);
-				if (result == -1) {
-					sd = new String("RTD "+ count + " END \r\n").getBytes();
-				} else {
-					sd = new String("RTD "+ count+ " " + Base64.getEncoder().encodeToString(sd) +" \r\n").getBytes();
-				}
+			if (flag == 0) {
+				rd = new byte[100];
+				sd = new byte[512];
+				rp = new DatagramPacket(rd, rd.length);
+				ss.receive(rp);
+				ip = rp.getAddress();
+				port = rp.getPort();
+				strConsignment = new String(rp.getData());
+				String FileName = (strConsignment.trim());
+				System.out.println("########################################");
 				System.out.println();
+				System.out.println("Received request for " + FileName + " filename from client ip address " + ip + " clientport "
+						+ port);
+				try {
+					fis = new FileInputStream(FileName); // file n
+				} catch (FileNotFoundException e) {
+					System.out.println("File not found on server Side");
+				}
+				rp = null;
+				sp = null;
+				flag++;
+			}
 
-        while (true){
-          sp=new DatagramPacket(sd,sd.length,ip,port);
+			Random random = new Random();
 
-  				if (Math.random()>LOSS_RATE){
-            ss.send(sp);
-          }
-          try{
-            rp = new DatagramPacket(rd,rd.length);
+			ss.setSoTimeout(3000);
 
-    				ss.receive(rp);
-            break;
-          }catch (SocketTimeoutException e) {
-            System.out.println(e.toString());
-            System.out.println("Packet lost or acknowledgement not received.");
-          }
+			while (true && result != -1) {
 
-        }
+				rd = new byte[100];
+				sd = new byte[512];
 
+				rp = new DatagramPacket(rd, rd.length);
 
-
-
+				try {
+					ss.receive(rp);
+				} catch (SocketTimeoutException e) {
+					// TODO: handle exception
+					continue;
+				}
 
 				// get client's consignment request from DatagramPacket
 				ip = rp.getAddress();
-				port =rp.getPort();
-				System.out.println("Client IP Address = " + ip);
-				System.out.println("Client port = " + port);
+				port = rp.getPort();
 
-				String ack = new String(rp.getData());
-				System.out.println(ack);
-				//consignment = Integer.parseInt((ack.split(" ")[1]));
-				//System.out.println("Client ACK = " + consignment);
+				strConsignment = new String(rp.getData());
+				consignment = Integer.parseInt(strConsignment.trim());
+				System.out.println("Recieved ACK " + strConsignment);
 
+				// Decide whether to send, or simulate packet loss.
+				if (random.nextDouble() < LOSS_RATE) {
+					System.out.println("forgot CONSIGNMENT #" + consignment);
+					continue;
+				}
 
-				rp=null;
+				// Simulate network delay.
+				try {
+					Thread.sleep((int) (random.nextDouble() * 2 * AVERAGE_DELAY));
+				} catch (InterruptedException e) {
+					// TODO catch block
+					e.printStackTrace();
+				}
+
+				// prepare data
+				result = fis.read(sd); // read next 512 byte
+				if (result == -1) {
+					sd = new String("END").getBytes();
+					consignment = -1;
+				}
+				sp = new DatagramPacket(sd, sd.length, ip, port);
+
+				ss.send(sp);
+
+				rp = null;
 				sp = null;
-				count++;
+
+				System.out.println("Sent CONSIGNMENT #" + consignment);
+
 			}
 
 		} catch (IOException ex) {
@@ -99,5 +130,6 @@ public class FServer {
 				System.out.println(ex.getMessage());
 			}
 		}
+
 	}
 }
